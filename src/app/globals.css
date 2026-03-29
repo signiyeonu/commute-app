@@ -1,0 +1,24 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 커스텀 전역 스타일 */
+body {
+  background-color: #f8fafc;
+  color: #1e293b;
+}
+
+/* 카드 그림자 */
+.card {
+  @apply bg-white rounded-2xl shadow-sm border border-gray-100 p-6;
+}
+
+/* 출근 완료 펄스 애니메이션 */
+@keyframes pulse-green {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
+}
+
+.checked-badge {
+  animation: pulse-green 2s infinite;
+}

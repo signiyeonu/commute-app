@@ -1,0 +1,54 @@
+// ============================
+// Firestore 보안 규칙
+// Firebase Console > Firestore > 규칙 탭에 붙여넣기
+// ============================
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // 로그인한 유저인지 확인하는 헬퍼 함수
+    function isLoggedIn() {
+      return request.auth != null;
+    }
+
+    // 시카(회장)인지 확인 - Firestore에서 role 조회
+    function isSika() {
+      return isLoggedIn() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'sika';
+    }
+
+    // 본인 데이터인지 확인
+    function isOwner(uid) {
+      return isLoggedIn() && request.auth.uid == uid;
+    }
+
+    // ── users 컬렉션 ──
+    match /users/{userId} {
+      // 본인 데이터 읽기/쓰기 허용
+      allow read: if isLoggedIn();
+      allow write: if isOwner(userId) || isSika();
+    }
+
+    // ── attendance 컬렉션 ──
+    match /attendance/{date}/records/{userId} {
+      // 본인 출근 기록 쓰기 허용 (이미 출근한 경우 중복 방지)
+      allow create: if isOwner(userId) && !exists(
+        /databases/$(database)/documents/attendance/$(date)/records/$(userId)
+      );
+      // 본인 기록 읽기 허용
+      allow read: if isOwner(userId) || isSika();
+      // 시카는 모든 기록 읽기 허용
+      allow list: if isSika();
+    }
+
+    // ── locations 컬렉션 ──
+    match /locations/{locationId} {
+      // 모든 로그인 유저가 근무지 목록 읽기 가능
+      allow read: if isLoggedIn();
+      // 시카만 근무지 추가/수정/삭제 가능
+      allow write: if isSika();
+    }
+  }
+}
