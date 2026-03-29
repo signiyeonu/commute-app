@@ -51,13 +51,13 @@ export default function LoginPage() {
       await signInWithKakao()
     } catch (err: unknown) {
       // 에러 원인에 따라 다른 메시지 표시
-      const msg = err instanceof Error ? err.message : String(err)
+      const msg = err instanceof Error ? err.message : JSON.stringify(err)
       if (msg.includes('SDK')) {
         setError('카카오 SDK 로드 실패. 잠시 후 새로고침 해주세요.')
       } else if (msg.includes('canceled') || msg.includes('cancel')) {
         setError('로그인을 취소했습니다.')
       } else {
-        setError(`카카오 로그인 실패: 카카오 디벨로퍼스에서 현재 도메인(${window.location.hostname})이 등록됐는지 확인하세요.`)
+        setError(`카카오 로그인 실패: ${msg}`)
       }
     } finally {
       setIsLoggingIn(false)
