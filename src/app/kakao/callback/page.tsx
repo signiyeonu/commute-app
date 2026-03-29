@@ -5,15 +5,19 @@
 // 카카오에서 리다이렉트되면 여기서 코드를 처리해 로그인 완료
 // ============================
 
-import { useEffect, useState, Suspense } from 'react'
+import { useEffect, useState, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 
 function KakaoCallbackInner() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [error, setError] = useState<string | null>(null)
+  const hasRun = useRef(false)
 
   useEffect(() => {
+    if (hasRun.current) return
+    hasRun.current = true
+
     const code = searchParams.get('code')
     const errorParam = searchParams.get('error')
 
