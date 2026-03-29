@@ -7,6 +7,8 @@
 
 import { useEffect, useState, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { signInWithCustomToken } from 'firebase/auth'
+import { auth } from '@/lib/firebase'
 
 function KakaoCallbackInner() {
   const router = useRouter()
@@ -52,7 +54,12 @@ function KakaoCallbackInner() {
         return
       }
 
-      const user = await res.json()
+      const { customToken, ...user } = await res.json()
+
+      // Firebase Custom Token으로 로그인 → Firestore 권한 획득
+      if (customToken) {
+        await signInWithCustomToken(auth, customToken)
+      }
 
       sessionStorage.setItem('kakao_user', JSON.stringify(user))
 

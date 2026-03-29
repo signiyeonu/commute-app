@@ -7,8 +7,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { initializeApp, getApps, cert } from 'firebase-admin/app'
 import { getFirestore } from 'firebase-admin/firestore'
+import { getAuth } from 'firebase-admin/auth'
 
-function getAdminDb() {
+function initAdmin() {
   if (!getApps().length) {
     initializeApp({
       credential: cert({
@@ -18,7 +19,16 @@ function getAdminDb() {
       }),
     })
   }
+}
+
+function getAdminDb() {
+  initAdmin()
   return getFirestore()
+}
+
+function getAdminAuth() {
+  initAdmin()
+  return getAuth()
 }
 
 export async function POST(request: NextRequest) {
@@ -101,7 +111,10 @@ export async function POST(request: NextRequest) {
       await userRef.set(user)
     }
 
-    return NextResponse.json(user)
+    // Firebase Custom Token 발급 (클라이언트가 Firebase Auth에 로그인할 수 있도록)
+    const customToken = await getAdminAuth().createCustomToken(uid)
+
+    return NextResponse.json({ ...user, customToken })
   } catch (error) {
     console.error('카카오 로그인 처리 오류:', error)
     return NextResponse.json({ error: '서버 오류' }, { status: 500 })
