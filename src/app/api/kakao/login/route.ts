@@ -1,0 +1,69 @@
+// ============================
+// 카카오 로그인 API
+// POST /api/kakao/login
+// 인증 코드 → access token → 유저 정보 반환
+// ============================
+
+import { NextRequest, NextResponse } from 'next/server'
+
+export async function POST(request: NextRequest) {
+  try {
+    const { code, redirectUri } = await request.json()
+
+    if (!code || !redirectUri) {
+      return NextResponse.json({ error: '필수 파라미터 누락' }, { status: 400 })
+    }
+
+    const restApiKey =
+      process.env.KAKAO_REST_API_KEY ||
+      process.env.NEXT_PUBLIC_KAKAO_REST_API_KEY
+
+    if (!restApiKey) {
+      return NextResponse.json(
+        { error: 'KAKAO_REST_API_KEY 환경변수가 설정되지 않았습니다' },
+        { status: 500 }
+      )
+    }
+
+    // 인증 코드 → 액세스 토큰 교환
+    const tokenRes = await fetch('https://kauth.kakao.com/oauth/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'authorization_code',
+        client_id: restApiKey,
+        redirect_uri: redirectUri,
+        code,
+      }),
+    })
+
+    if (!tokenRes.ok) {
+      const err = await tokenRes.json()
+      return NextResponse.json(
+        { error: `카카오 토큰 발급 실패: ${err.error_description || err.error}` },
+        { status: 400 }
+      )
+    }
+
+    const { access_token } = await tokenRes.json()
+
+    // 액세스 토큰 → 유저 정보 조회
+    const userRes = await fetch('https://kapi.kakao.com/v2/user/me', {
+      headers: { Authorization: `Bearer ${access_token}` },
+    })
+
+    if (!userRes.ok) {
+      return NextResponse.json({ error: '유저 정보 조회 실패' }, { status: 400 })
+    }
+
+    const userData = await userRes.json()
+
+    return NextResponse.json({
+      id: String(userData.id),
+      name: userData.kakao_account?.profile?.nickname || '카카오유저',
+    })
+  } catch (error) {
+    console.error('카카오 로그인 처리 오류:', error)
+    return NextResponse.json({ error: '서버 오류' }, { status: 500 })
+  }
+}

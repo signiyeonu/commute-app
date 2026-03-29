@@ -131,55 +131,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }
 
   // ── 카카오 로그인 ──
-  // 카카오 SDK는 _document.tsx 또는 layout.tsx에서 스크립트로 로드됨
+  // Kakao SDK v2: Auth.login() 제거됨 → authorize() 리다이렉트 방식 사용
   const signInWithKakao = async () => {
-    return new Promise<void>((resolve, reject) => {
-      // window.Kakao가 로드됐는지 확인
-      if (typeof window === 'undefined' || !window.Kakao) {
-        reject(new Error('카카오 SDK가 로드되지 않았습니다'))
-        return
-      }
-
-      window.Kakao.Auth.login({
-        success: async (authObj: KakaoAuthObj) => {
-          try {
-            // 카카오 유저 정보 가져오기
-            window.Kakao.API.request({
-              url: '/v2/user/me',
-              success: async (res: KakaoUserInfo) => {
-                const kakaoId = String(res.id)
-                const uid = `kakao_${kakaoId}`
-                const name =
-                  res.kakao_account?.profile?.nickname || '카카오유저'
-
-                let user = await getUser(uid)
-
-                if (!user) {
-                  user = {
-                    uid,
-                    name,
-                    role: 'member',
-                    authProvider: 'kakao',
-                    kakaoId,
-                    createdAt: new Date().toISOString(),
-                  }
-                  await saveUser(user)
-                }
-
-                // 세션에 저장 (페이지 새로고침 시 유지)
-                sessionStorage.setItem('kakao_user', JSON.stringify(user))
-                setCurrentUser(user)
-                resolve()
-              },
-              fail: (err: unknown) => reject(err),
-            })
-          } catch (err) {
-            reject(err)
-          }
-        },
-        fail: (err: unknown) => reject(err),
-      })
-    })
+    if (typeof window === 'undefined' || !window.Kakao) {
+      throw new Error('카카오 SDK가 로드되지 않았습니다')
+    }
+    const redirectUri = `${window.location.origin}/kakao/callback`
+    window.Kakao.Auth.authorize({ redirectUri })
+    // 카카오 페이지로 리다이렉트됨 (함수가 여기서 종료되지 않음)
   }
 
   // ── 로그아웃 ──
@@ -206,34 +165,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   )
 }
 
-// ── 카카오 SDK 타입 선언 (TypeScript용) ──
+// ── 카카오 SDK v2 타입 선언 (TypeScript용) ──
 declare global {
   interface Window {
     Kakao: {
       init: (key: string) => void
       isInitialized: () => boolean
       Auth: {
-        login: (options: { success: (obj: KakaoAuthObj) => void; fail: (err: unknown) => void }) => void
+        authorize: (options: { redirectUri: string; scope?: string }) => void
         logout: () => void
         getAccessToken: () => string | null
       }
       API: {
-        request: (options: { url: string; success: (res: KakaoUserInfo) => void; fail: (err: unknown) => void }) => void
+        request: (options: { url: string; success: (res: unknown) => void; fail: (err: unknown) => void }) => void
       }
     }
-  }
-}
-
-interface KakaoAuthObj {
-  access_token: string
-}
-
-interface KakaoUserInfo {
-  id: number
-  kakao_account?: {
-    profile?: {
-      nickname?: string
-    }
-    email?: string
   }
 }
