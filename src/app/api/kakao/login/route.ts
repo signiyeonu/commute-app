@@ -1,10 +1,25 @@
 // ============================
 // 카카오 로그인 API
 // POST /api/kakao/login
-// 인증 코드 → access token → 유저 정보 반환
+// 인증 코드 → access token → 유저 조회/생성 → 유저 정보 반환
 // ============================
 
 import { NextRequest, NextResponse } from 'next/server'
+import { initializeApp, getApps, cert } from 'firebase-admin/app'
+import { getFirestore } from 'firebase-admin/firestore'
+
+function getAdminDb() {
+  if (!getApps().length) {
+    initializeApp({
+      credential: cert({
+        projectId: process.env.FIREBASE_PROJECT_ID,
+        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+        privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+      }),
+    })
+  }
+  return getFirestore()
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -24,7 +39,6 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       )
     }
-
 
     const tokenParams: Record<string, string> = {
       grant_type: 'authorization_code',
@@ -63,11 +77,31 @@ export async function POST(request: NextRequest) {
     }
 
     const userData = await userRes.json()
+    const kakaoId = String(userData.id)
+    const uid = `kakao_${kakaoId}`
+    const name = userData.kakao_account?.profile?.nickname || '카카오유저'
 
-    return NextResponse.json({
-      id: String(userData.id),
-      name: userData.kakao_account?.profile?.nickname || '카카오유저',
-    })
+    // Admin SDK로 Firestore에서 유저 조회/생성 (보안 규칙 우회)
+    const db = getAdminDb()
+    const userRef = db.collection('users').doc(uid)
+    const userSnap = await userRef.get()
+
+    let user
+    if (userSnap.exists) {
+      user = userSnap.data()
+    } else {
+      user = {
+        uid,
+        name,
+        role: 'member',
+        authProvider: 'kakao',
+        kakaoId,
+        createdAt: new Date().toISOString(),
+      }
+      await userRef.set(user)
+    }
+
+    return NextResponse.json(user)
   } catch (error) {
     console.error('카카오 로그인 처리 오류:', error)
     return NextResponse.json({ error: '서버 오류' }, { status: 500 })

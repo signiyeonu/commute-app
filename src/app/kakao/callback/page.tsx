@@ -7,7 +7,6 @@
 
 import { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { getUser, saveUser } from '@/lib/firestore'
 
 function KakaoCallbackInner() {
   const router = useRouter()
@@ -49,22 +48,7 @@ function KakaoCallbackInner() {
         return
       }
 
-      const { id, name } = await res.json()
-      const uid = `kakao_${id}`
-
-      let user = await getUser(uid)
-
-      if (!user) {
-        user = {
-          uid,
-          name,
-          role: 'member',
-          authProvider: 'kakao',
-          kakaoId: id,
-          createdAt: new Date().toISOString(),
-        }
-        await saveUser(user)
-      }
+      const user = await res.json()
 
       sessionStorage.setItem('kakao_user', JSON.stringify(user))
 
