@@ -137,7 +137,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       throw new Error('카카오 SDK가 로드되지 않았습니다')
     }
     const redirectUri = `${window.location.origin}/kakao/callback`
-    window.Kakao.Auth.authorize({ redirectUri })
+    window.Kakao.Auth.authorize({ redirectUri, scope: 'profile_nickname' })
     // 카카오 페이지로 리다이렉트됨 (함수가 여기서 종료되지 않음)
   }
 
