@@ -25,6 +25,9 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // 디버그용 (확인 후 삭제 예정)
+    const keyDebug = `앞4자리:${restApiKey.slice(0, 4)} 길이:${restApiKey.length}`
+
     // 인증 코드 → 액세스 토큰 교환
     const tokenRes = await fetch('https://kauth.kakao.com/oauth/token', {
       method: 'POST',
@@ -40,7 +43,7 @@ export async function POST(request: NextRequest) {
     if (!tokenRes.ok) {
       const err = await tokenRes.json()
       return NextResponse.json(
-        { error: `카카오 토큰 발급 실패: ${err.error_description || err.error}` },
+        { error: `카카오 토큰 발급 실패: ${err.error_description || err.error} (${keyDebug})` },
         { status: 400 }
       )
     }
