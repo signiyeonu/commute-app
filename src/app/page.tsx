@@ -57,7 +57,7 @@ export default function LoginPage() {
       } else if (msg.includes('canceled') || msg.includes('cancel')) {
         setError('로그인을 취소했습니다.')
       } else {
-        setError(`카카오 로그인 실패: 카카오 디벨로퍼스에서 현재 도메인(localhost:3000)이 등록됐는지 확인하세요.`)
+        setError(`카카오 로그인 실패: 카카오 디벨로퍼스에서 현재 도메인(${window.location.hostname})이 등록됐는지 확인하세요.`)
       }
     } finally {
       setIsLoggingIn(false)
