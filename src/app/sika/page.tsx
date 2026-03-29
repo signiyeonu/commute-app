@@ -4,7 +4,7 @@
 // 시카(회장) 전용 대시보드 (/sika)
 // - 오늘 전체 출근 현황 실시간 표시
 // - 근무지 관리
-// - 날짜별 과거 기록 조회
+// - 초대코드 표시
 // ============================
 
 import { useEffect, useState } from 'react'
@@ -15,16 +15,16 @@ import {
   getAllUsers,
   getLocations,
   addLocation,
+  getTeam,
   getTodayKey,
 } from '@/lib/firestore'
-import { collection, getDocs } from 'firebase/firestore'
-import { db } from '@/lib/firebase'
-import { AttendanceRecord, User, Location } from '@/types'
+import { AttendanceRecord, User, Location, Team } from '@/types'
 
 export default function SikaDashboard() {
   const { currentUser, loading, signOut } = useAuth()
   const router = useRouter()
 
+  const [team, setTeam] = useState<Team | null>(null)
   const [allUsers, setAllUsers] = useState<User[]>([])
   const [todayRecords, setTodayRecords] = useState<Record<string, AttendanceRecord>>({})
   const [locations, setLocations] = useState<Location[]>([])
@@ -32,12 +32,17 @@ export default function SikaDashboard() {
   const [isAddingLocation, setIsAddingLocation] = useState(false)
   const [pageLoading, setPageLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'attendance' | 'manage'>('attendance')
+  const [codeCopied, setCodeCopied] = useState(false)
 
   // 권한 확인
   useEffect(() => {
     if (!loading) {
       if (!currentUser) {
         router.push('/')
+        return
+      }
+      if (!currentUser.teamId) {
+        router.push('/onboarding')
         return
       }
       if (currentUser.role !== 'sika') {
@@ -49,12 +54,14 @@ export default function SikaDashboard() {
   }, [currentUser, loading])
 
   const initData = async () => {
+    const teamId = currentUser!.teamId!
     try {
-      const [users, locs] = await Promise.all([
-        getAllUsers(),
-        getLocations(),
+      const [teamData, users, locs] = await Promise.all([
+        getTeam(teamId),
+        getAllUsers(teamId),
+        getLocations(teamId),
       ])
-      // 시카 본인은 출근 현황에서 제외
+      setTeam(teamData)
       setAllUsers(users.filter(u => u.role !== 'sika'))
       setLocations(locs)
     } catch (err) {
@@ -64,26 +71,24 @@ export default function SikaDashboard() {
     }
   }
 
-  // 실시간 출근 현황 구독 (Firestore onSnapshot)
+  // 실시간 출근 현황 구독
   useEffect(() => {
-    if (!currentUser || currentUser.role !== 'sika') return
+    if (!currentUser?.teamId || currentUser.role !== 'sika') return
 
-    const unsubscribe = subscribeToTodayAttendance((records) => {
+    const unsubscribe = subscribeToTodayAttendance(currentUser.teamId, (records) => {
       setTodayRecords(records)
     })
 
-    // 컴포넌트 언마운트 시 구독 해제
     return () => unsubscribe()
   }, [currentUser])
 
-  // 근무지 추가
   const handleAddLocation = async () => {
-    if (!newLocationName.trim()) return
+    if (!newLocationName.trim() || !currentUser?.teamId) return
     setIsAddingLocation(true)
     try {
-      await addLocation(newLocationName.trim(), locations.length)
+      await addLocation(currentUser.teamId, newLocationName.trim(), locations.length)
       setNewLocationName('')
-      const locs = await getLocations()
+      const locs = await getLocations(currentUser.teamId)
       setLocations(locs)
     } catch (err) {
       alert('근무지 추가에 실패했습니다.')
@@ -92,7 +97,13 @@ export default function SikaDashboard() {
     }
   }
 
-  // 시간 포맷
+  const handleCopyCode = () => {
+    if (!team?.inviteCode) return
+    navigator.clipboard.writeText(team.inviteCode)
+    setCodeCopied(true)
+    setTimeout(() => setCodeCopied(false), 2000)
+  }
+
   const formatTime = (isoString: string): string => {
     return new Date(isoString).toLocaleTimeString('ko-KR', {
       hour: '2-digit',
@@ -101,7 +112,6 @@ export default function SikaDashboard() {
     })
   }
 
-  // 통계 계산
   const checkedCount = allUsers.filter(u => todayRecords[u.uid]).length
   const totalCount = allUsers.length
 
@@ -123,13 +133,13 @@ export default function SikaDashboard() {
               <span className="bg-purple-100 text-purple-700 text-xs font-bold px-2 py-0.5 rounded-full">
                 시카 전용
               </span>
-              <h1 className="text-lg font-bold text-gray-800">출근 현황</h1>
+              <h1 className="text-lg font-bold text-gray-800">{team?.name || '출근 현황'}</h1>
             </div>
             <p className="text-xs text-gray-400 mt-0.5">
               📅 {getTodayKey()}  |  실시간 업데이트
             </p>
           </div>
-            <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2">
             <button
               onClick={() => router.push('/sika/kakao-connect')}
               className="text-xs text-yellow-600 hover:text-yellow-700 border border-yellow-300 bg-yellow-50 rounded-lg px-3 py-1.5"
@@ -167,14 +177,13 @@ export default function SikaDashboard() {
                 : 'text-gray-500 hover:text-gray-700'
             }`}
           >
-            ⚙️ 관리
+            ⚙️ 팀 관리
           </button>
         </div>
 
         {/* ── 출근 현황 탭 ── */}
         {activeTab === 'attendance' && (
           <>
-            {/* 요약 카드 */}
             <div className="grid grid-cols-3 gap-3">
               <div className="bg-white rounded-2xl p-4 text-center shadow-sm">
                 <div className="text-3xl font-bold text-blue-600">{totalCount}</div>
@@ -192,18 +201,17 @@ export default function SikaDashboard() {
               </div>
             </div>
 
-            {/* 출근 현황 목록 */}
             <div className="bg-white rounded-2xl shadow-sm overflow-hidden">
               {allUsers.length === 0 ? (
                 <div className="text-center py-12 text-gray-400">
                   <div className="text-4xl mb-2">👥</div>
-                  <p className="text-sm">등록된 멤버가 없습니다</p>
+                  <p className="text-sm">아직 팀에 참여한 멤버가 없습니다</p>
+                  <p className="text-xs mt-1">아래 팀 관리 탭에서 초대코드를 공유하세요</p>
                 </div>
               ) : (
                 <ul className="divide-y divide-gray-50">
                   {allUsers
                     .sort((a, b) => {
-                      // 출근한 사람 먼저 정렬
                       const aChecked = !!todayRecords[a.uid]
                       const bChecked = !!todayRecords[b.uid]
                       if (aChecked && !bChecked) return -1
@@ -214,7 +222,6 @@ export default function SikaDashboard() {
                       const record = todayRecords[user.uid]
                       return (
                         <li key={user.uid} className="flex items-center px-5 py-4 gap-4">
-                          {/* 상태 아이콘 */}
                           <div
                             className={`w-10 h-10 rounded-full flex items-center justify-center text-xl flex-shrink-0 ${
                               record ? 'bg-green-100' : 'bg-gray-100'
@@ -222,12 +229,8 @@ export default function SikaDashboard() {
                           >
                             {record ? '✅' : '⬜'}
                           </div>
-
-                          {/* 이름 + 정보 */}
                           <div className="flex-1 min-w-0">
-                            <p className="font-semibold text-gray-800 truncate">
-                              {user.name}
-                            </p>
+                            <p className="font-semibold text-gray-800 truncate">{user.name}</p>
                             {record ? (
                               <p className="text-xs text-green-600 mt-0.5">
                                 📍 {record.location} &nbsp;·&nbsp; {formatTime(record.checkedAt)}
@@ -236,8 +239,6 @@ export default function SikaDashboard() {
                               <p className="text-xs text-gray-400 mt-0.5">미출근</p>
                             )}
                           </div>
-
-                          {/* 출근 시각 배지 */}
                           {record && (
                             <div className="bg-green-100 text-green-700 text-xs font-bold px-3 py-1 rounded-full flex-shrink-0">
                               {formatTime(record.checkedAt)}
@@ -256,14 +257,33 @@ export default function SikaDashboard() {
           </>
         )}
 
-        {/* ── 관리 탭 ── */}
+        {/* ── 팀 관리 탭 ── */}
         {activeTab === 'manage' && (
           <div className="space-y-4">
+            {/* 초대코드 */}
+            <div className="bg-white rounded-2xl shadow-sm p-5">
+              <h3 className="font-bold text-gray-800 mb-3">🔑 팀 초대코드</h3>
+              <p className="text-xs text-gray-400 mb-3">
+                멤버에게 이 코드를 공유하면 팀에 참여할 수 있습니다
+              </p>
+              <div className="flex items-center gap-2">
+                <div className="flex-1 bg-gray-50 border-2 border-dashed border-gray-200 rounded-xl px-4 py-3 text-center">
+                  <span className="text-2xl font-mono font-bold text-gray-800 tracking-widest">
+                    {team?.inviteCode}
+                  </span>
+                </div>
+                <button
+                  onClick={handleCopyCode}
+                  className="bg-blue-600 text-white rounded-xl px-4 py-3 text-sm font-semibold hover:bg-blue-700 transition-colors whitespace-nowrap"
+                >
+                  {codeCopied ? '복사됨 ✓' : '복사'}
+                </button>
+              </div>
+            </div>
+
             {/* 근무지 관리 */}
             <div className="bg-white rounded-2xl shadow-sm p-5">
               <h3 className="font-bold text-gray-800 mb-4">📍 근무지 관리</h3>
-
-              {/* 근무지 목록 */}
               <div className="space-y-2 mb-4">
                 {locations.length === 0 ? (
                   <p className="text-sm text-gray-400">등록된 근무지가 없습니다</p>
@@ -273,15 +293,11 @@ export default function SikaDashboard() {
                       key={loc.id}
                       className="flex items-center justify-between bg-gray-50 rounded-xl px-4 py-3"
                     >
-                      <span className="text-sm font-medium text-gray-700">
-                        {loc.name}
-                      </span>
+                      <span className="text-sm font-medium text-gray-700">{loc.name}</span>
                     </div>
                   ))
                 )}
               </div>
-
-              {/* 근무지 추가 */}
               <div className="flex gap-2">
                 <input
                   type="text"
@@ -303,23 +319,27 @@ export default function SikaDashboard() {
 
             {/* 멤버 목록 */}
             <div className="bg-white rounded-2xl shadow-sm p-5">
-              <h3 className="font-bold text-gray-800 mb-4">👥 전체 멤버</h3>
-              <div className="space-y-2">
-                {allUsers.map((user) => (
-                  <div
-                    key={user.uid}
-                    className="flex items-center gap-3 bg-gray-50 rounded-xl px-4 py-3"
-                  >
-                    <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-sm">
-                      {user.name[0]}
+              <h3 className="font-bold text-gray-800 mb-4">👥 팀 멤버 ({allUsers.length}명)</h3>
+              {allUsers.length === 0 ? (
+                <p className="text-sm text-gray-400">아직 참여한 멤버가 없습니다</p>
+              ) : (
+                <div className="space-y-2">
+                  {allUsers.map((user) => (
+                    <div
+                      key={user.uid}
+                      className="flex items-center gap-3 bg-gray-50 rounded-xl px-4 py-3"
+                    >
+                      <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-sm font-bold text-blue-600">
+                        {user.name[0]}
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-700">{user.name}</p>
+                        <p className="text-xs text-gray-400">{user.authProvider} 로그인</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm font-medium text-gray-700">{user.name}</p>
-                      <p className="text-xs text-gray-400">{user.authProvider} 로그인</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}

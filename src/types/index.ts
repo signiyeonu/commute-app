@@ -2,6 +2,15 @@
 // 앱 전체에서 사용하는 타입 정의
 // ============================
 
+// 팀 정보 (Firestore teams 컬렉션)
+export interface Team {
+  id: string
+  name: string
+  sikaUid: string
+  inviteCode: string
+  createdAt: string
+}
+
 // 유저 정보 (Firestore users 컬렉션)
 export interface User {
   uid: string                    // Firebase UID 또는 "kakao_" + 카카오ID
@@ -10,6 +19,7 @@ export interface User {
   role: 'member' | 'sika'        // member: 일반, sika: 회장
   authProvider: 'google' | 'kakao'
   kakaoId?: string               // 카카오 로그인 시 카카오 유저 ID
+  teamId?: string                // 소속 팀 ID (온보딩 전에는 없음)
   createdAt: string              // ISO 날짜 문자열
 }
 

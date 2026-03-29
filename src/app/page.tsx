@@ -24,7 +24,9 @@ export default function LoginPage() {
   // 이미 로그인된 경우 적절한 페이지로 이동
   useEffect(() => {
     if (!loading && currentUser) {
-      if (currentUser.role === 'sika') {
+      if (!currentUser.teamId) {
+        router.push('/onboarding')
+      } else if (currentUser.role === 'sika') {
         router.push('/sika')
       } else {
         router.push('/dashboard')

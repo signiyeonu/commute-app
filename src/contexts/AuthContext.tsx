@@ -29,6 +29,7 @@ interface AuthContextType {
   signInWithGoogle: () => Promise<void>
   signInWithKakao: () => Promise<void>
   signOut: () => Promise<void>
+  refreshUser: () => Promise<void>  // 온보딩 후 유저 정보 갱신용
 }
 
 const AuthContext = createContext<AuthContextType | null>(null)
@@ -141,6 +142,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     // 카카오 페이지로 리다이렉트됨 (함수가 여기서 종료되지 않음)
   }
 
+  // ── 유저 정보 갱신 (온보딩 완료 후 teamId 반영) ──
+  const refreshUser = async () => {
+    // 카카오 유저: sessionStorage 기준으로 Firestore 최신 데이터 반영
+    const kakaoSession = sessionStorage.getItem('kakao_user')
+    if (kakaoSession) {
+      const cached = JSON.parse(kakaoSession)
+      const fresh = await getUser(cached.uid)
+      if (fresh) {
+        sessionStorage.setItem('kakao_user', JSON.stringify(fresh))
+        setCurrentUser(fresh)
+      }
+      return
+    }
+    // 구글 유저: Firebase Auth UID로 Firestore 재조회
+    const { currentUser: firebaseUser } = auth
+    if (firebaseUser) {
+      const fresh = await getUser(firebaseUser.uid)
+      if (fresh) setCurrentUser(fresh)
+    }
+  }
+
   // ── 로그아웃 ──
   const signOut = async () => {
     // 구글 로그아웃
@@ -158,7 +180,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   return (
     <AuthContext.Provider
-      value={{ currentUser, loading, signInWithGoogle, signInWithKakao, signOut }}
+      value={{ currentUser, loading, signInWithGoogle, signInWithKakao, signOut, refreshUser }}
     >
       {children}
     </AuthContext.Provider>

@@ -37,6 +37,10 @@ export default function DashboardPage() {
         router.push('/')
         return
       }
+      if (!currentUser.teamId) {
+        router.push('/onboarding')
+        return
+      }
       if (currentUser.role === 'sika') {
         router.push('/sika')
         return
@@ -49,9 +53,10 @@ export default function DashboardPage() {
     try {
       setLoadError(null)
       // 오늘 내 출근 기록 + 근무지 목록 동시에 가져오기
+      const teamId = currentUser!.teamId!
       const [record, locs] = await Promise.all([
-        getMyTodayRecord(currentUser!.uid),
-        getLocations(),
+        getMyTodayRecord(currentUser!.uid, teamId),
+        getLocations(teamId),
       ])
       setMyRecord(record)
       setLocations(locs)
@@ -72,13 +77,13 @@ export default function DashboardPage() {
     setIsChecking(true)
     try {
       // 1. Firestore에 출근 기록 저장
-      await checkIn(currentUser.uid, currentUser.name, selectedLocation)
+      await checkIn(currentUser.uid, currentUser.name, selectedLocation, currentUser.teamId!)
 
       // 2. 시카에게 카카오 알림 전송
       await sendKakaoNotification(currentUser.name, selectedLocation)
 
       // 3. 내 기록 업데이트
-      const record = await getMyTodayRecord(currentUser.uid)
+      const record = await getMyTodayRecord(currentUser.uid, currentUser.teamId!)
       setMyRecord(record)
     } catch (err) {
       console.error('출근 체크인 실패:', err)
