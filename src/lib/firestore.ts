@@ -111,6 +111,11 @@ export const getUser = async (uid: string): Promise<User | null> => {
   return snapshot.exists() ? (snapshot.data() as User) : null
 }
 
+// 유저 닉네임 변경
+export const updateUserName = async (uid: string, name: string): Promise<void> => {
+  await updateDoc(doc(db, 'users', uid), { name })
+}
+
 // 팀에 속한 전체 유저 목록
 export const getAllUsers = async (teamId: string): Promise<User[]> => {
   const usersRef = collection(db, 'users')

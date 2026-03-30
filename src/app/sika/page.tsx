@@ -17,6 +17,7 @@ import {
   addLocation,
   getTeam,
   getTodayKey,
+  updateUserName,
 } from '@/lib/firestore'
 import { AttendanceRecord, User, Location, Team } from '@/types'
 
@@ -33,6 +34,9 @@ export default function SikaDashboard() {
   const [pageLoading, setPageLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'attendance' | 'manage'>('attendance')
   const [codeCopied, setCodeCopied] = useState(false)
+  const [editingUid, setEditingUid] = useState<string | null>(null)
+  const [editingName, setEditingName] = useState('')
+  const [savingName, setSavingName] = useState(false)
 
   // 권한 확인
   useEffect(() => {
@@ -94,6 +98,20 @@ export default function SikaDashboard() {
       alert('근무지 추가에 실패했습니다.')
     } finally {
       setIsAddingLocation(false)
+    }
+  }
+
+  const handleSaveName = async (uid: string) => {
+    if (!editingName.trim()) return
+    setSavingName(true)
+    try {
+      await updateUserName(uid, editingName.trim())
+      setAllUsers(prev => prev.map(u => u.uid === uid ? { ...u, name: editingName.trim() } : u))
+      setEditingUid(null)
+    } catch {
+      alert('닉네임 변경에 실패했습니다.')
+    } finally {
+      setSavingName(false)
     }
   }
 
@@ -329,13 +347,50 @@ export default function SikaDashboard() {
                       key={user.uid}
                       className="flex items-center gap-3 bg-gray-50 rounded-xl px-4 py-3"
                     >
-                      <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-sm font-bold text-blue-600">
+                      <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-sm font-bold text-blue-600 flex-shrink-0">
                         {user.name[0]}
                       </div>
-                      <div>
-                        <p className="text-sm font-medium text-gray-700">{user.name}</p>
-                        <p className="text-xs text-gray-400">{user.authProvider} 로그인</p>
-                      </div>
+                      {editingUid === user.uid ? (
+                        <div className="flex-1 flex gap-2">
+                          <input
+                            type="text"
+                            value={editingName}
+                            onChange={(e) => setEditingName(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') handleSaveName(user.uid)
+                              if (e.key === 'Escape') setEditingUid(null)
+                            }}
+                            autoFocus
+                            className="flex-1 border border-blue-300 rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
+                          />
+                          <button
+                            onClick={() => handleSaveName(user.uid)}
+                            disabled={savingName || !editingName.trim()}
+                            className="text-xs bg-blue-600 text-white rounded-lg px-3 py-1.5 font-semibold disabled:opacity-50"
+                          >
+                            저장
+                          </button>
+                          <button
+                            onClick={() => setEditingUid(null)}
+                            className="text-xs text-gray-400 rounded-lg px-2 py-1.5"
+                          >
+                            취소
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="flex-1">
+                            <p className="text-sm font-medium text-gray-700">{user.name}</p>
+                            <p className="text-xs text-gray-400">{user.authProvider} 로그인</p>
+                          </div>
+                          <button
+                            onClick={() => { setEditingUid(user.uid); setEditingName(user.name) }}
+                            className="text-xs text-gray-400 hover:text-blue-600 border border-gray-200 hover:border-blue-300 rounded-lg px-3 py-1.5 transition-colors"
+                          >
+                            닉네임 변경
+                          </button>
+                        </>
+                      )}
                     </div>
                   ))}
                 </div>
