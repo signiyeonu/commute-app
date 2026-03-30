@@ -18,6 +18,8 @@ import {
   getTodayKey,
   joinTeamByCode,
   updateUserName,
+  cancelCheckIn,
+  updateCheckIn,
 } from '@/lib/firestore'
 import { AttendanceRecord, Location } from '@/types'
 
@@ -38,6 +40,10 @@ export default function DashboardPage() {
   const [isEditingName, setIsEditingName] = useState(false)
   const [editingName, setEditingName] = useState('')
   const [isSavingName, setIsSavingName] = useState(false)
+  const [isEditingRecord, setIsEditingRecord] = useState(false)
+  const [editLocation, setEditLocation] = useState('')
+  const [isCancelling, setIsCancelling] = useState(false)
+  const [isSavingRecord, setIsSavingRecord] = useState(false)
 
   // 로그인 여부 확인 및 데이터 로드
   useEffect(() => {
@@ -99,6 +105,34 @@ export default function DashboardPage() {
       alert('출근 처리 중 오류가 발생했습니다. 다시 시도해주세요.')
     } finally {
       setIsChecking(false)
+    }
+  }
+
+  const handleCancelCheckIn = async () => {
+    if (!currentUser || !confirm('출근을 취소하시겠습니까?')) return
+    setIsCancelling(true)
+    try {
+      await cancelCheckIn(currentUser.uid, currentUser.teamId!)
+      setMyRecord(null)
+    } catch {
+      alert('출근 취소에 실패했습니다.')
+    } finally {
+      setIsCancelling(false)
+    }
+  }
+
+  const handleUpdateCheckIn = async () => {
+    if (!currentUser || !editLocation) return
+    setIsSavingRecord(true)
+    try {
+      await updateCheckIn(currentUser.uid, currentUser.teamId!, editLocation)
+      const record = await getMyTodayRecord(currentUser.uid, currentUser.teamId!)
+      setMyRecord(record)
+      setIsEditingRecord(false)
+    } catch {
+      alert('출근 정보 수정에 실패했습니다.')
+    } finally {
+      setIsSavingRecord(false)
     }
   }
 
@@ -247,9 +281,42 @@ export default function DashboardPage() {
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-gray-500 text-sm">근무지</span>
-                <span className="font-semibold text-gray-800">
-                  📍 {myRecord.location}
-                </span>
+                {isEditingRecord ? (
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={editLocation}
+                      onChange={(e) => setEditLocation(e.target.value)}
+                      className="border border-blue-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
+                    >
+                      {locations.map((loc) => (
+                        <option key={loc.id} value={loc.name}>{loc.name}</option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={handleUpdateCheckIn}
+                      disabled={isSavingRecord}
+                      className="text-xs bg-blue-600 text-white rounded-lg px-2 py-1 font-semibold disabled:opacity-50"
+                    >
+                      저장
+                    </button>
+                    <button
+                      onClick={() => setIsEditingRecord(false)}
+                      className="text-xs text-gray-400"
+                    >
+                      취소
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-gray-800">📍 {myRecord.location}</span>
+                    <button
+                      onClick={() => { setIsEditingRecord(true); setEditLocation(myRecord.location) }}
+                      className="text-xs text-gray-400 hover:text-blue-600 border border-gray-200 hover:border-blue-300 rounded-lg px-2 py-1 transition-colors"
+                    >
+                      수정
+                    </button>
+                  </div>
+                )}
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-gray-500 text-sm">날짜</span>
@@ -259,7 +326,15 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            <p className="text-xs text-gray-400 mt-4">
+            <button
+              onClick={handleCancelCheckIn}
+              disabled={isCancelling}
+              className="mt-5 w-full border-2 border-red-200 text-red-500 hover:bg-red-50 font-semibold py-3 rounded-2xl text-sm transition-all disabled:opacity-50"
+            >
+              {isCancelling ? '취소 중...' : '출근 취소'}
+            </button>
+
+            <p className="text-xs text-gray-400 mt-3">
               자정(00:00)이 되면 자동으로 초기화됩니다
             </p>
           </div>

@@ -149,6 +149,26 @@ export const checkIn = async (
   await setDoc(recordRef, record)
 }
 
+export const cancelCheckIn = async (
+  uid: string,
+  teamId: string
+): Promise<void> => {
+  const dateKey = getTodayKey()
+  const recordRef = doc(db, 'teams', teamId, 'attendance', dateKey, 'records', uid)
+  const { deleteDoc } = await import('firebase/firestore')
+  await deleteDoc(recordRef)
+}
+
+export const updateCheckIn = async (
+  uid: string,
+  teamId: string,
+  location: string
+): Promise<void> => {
+  const dateKey = getTodayKey()
+  const recordRef = doc(db, 'teams', teamId, 'attendance', dateKey, 'records', uid)
+  await updateDoc(recordRef, { location })
+}
+
 export const getMyTodayRecord = async (
   uid: string,
   teamId: string
