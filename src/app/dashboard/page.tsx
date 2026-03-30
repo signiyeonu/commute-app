@@ -16,11 +16,12 @@ import {
   getLocations,
   sendKakaoNotification,
   getTodayKey,
+  joinTeamByCode,
 } from '@/lib/firestore'
 import { AttendanceRecord, Location } from '@/types'
 
 export default function DashboardPage() {
-  const { currentUser, loading, signOut } = useAuth()
+  const { currentUser, loading, signOut, refreshUser } = useAuth()
   const router = useRouter()
 
   const [myRecord, setMyRecord] = useState<AttendanceRecord | null>(null)
@@ -29,6 +30,10 @@ export default function DashboardPage() {
   const [isChecking, setIsChecking] = useState(false)
   const [pageLoading, setPageLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
+  const [showTeamChange, setShowTeamChange] = useState(false)
+  const [newInviteCode, setNewInviteCode] = useState('')
+  const [isChangingTeam, setIsChangingTeam] = useState(false)
+  const [teamChangeError, setTeamChangeError] = useState<string | null>(null)
 
   // 로그인 여부 확인 및 데이터 로드
   useEffect(() => {
@@ -90,6 +95,25 @@ export default function DashboardPage() {
       alert('출근 처리 중 오류가 발생했습니다. 다시 시도해주세요.')
     } finally {
       setIsChecking(false)
+    }
+  }
+
+  const handleTeamChange = async () => {
+    if (!newInviteCode.trim() || !currentUser) return
+    setIsChangingTeam(true)
+    setTeamChangeError(null)
+    try {
+      await joinTeamByCode(currentUser.uid, newInviteCode.trim())
+      await refreshUser()
+      setShowTeamChange(false)
+      setNewInviteCode('')
+      // 새 팀 데이터 다시 로드
+      setPageLoading(true)
+      loadData()
+    } catch (err) {
+      setTeamChangeError(err instanceof Error ? err.message : '팀 변경에 실패했습니다.')
+    } finally {
+      setIsChangingTeam(false)
     }
   }
 
@@ -247,6 +271,44 @@ export default function DashboardPage() {
             <p className="text-center text-xs text-gray-400 mt-3">
               버튼을 누르면 시카에게 알림이 전송됩니다
             </p>
+          </div>
+        )}
+        {/* 팀 변경 섹션 */}
+        <div className="text-center">
+          <button
+            onClick={() => { setShowTeamChange(!showTeamChange); setTeamChangeError(null) }}
+            className="text-xs text-gray-400 hover:text-gray-600 underline"
+          >
+            다른 팀으로 이전하기
+          </button>
+        </div>
+
+        {showTeamChange && (
+          <div className="bg-white rounded-2xl shadow-sm p-5">
+            <h3 className="font-semibold text-gray-700 mb-1 text-sm">팀 변경</h3>
+            <p className="text-xs text-gray-400 mb-3">새 팀의 초대코드를 입력하면 해당 팀으로 이전됩니다</p>
+            {teamChangeError && (
+              <div className="bg-red-50 text-red-600 rounded-xl p-3 mb-3 text-xs">
+                {teamChangeError}
+              </div>
+            )}
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={newInviteCode}
+                onChange={(e) => setNewInviteCode(e.target.value.toUpperCase())}
+                onKeyDown={(e) => e.key === 'Enter' && handleTeamChange()}
+                placeholder="초대코드 입력"
+                className="flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-mono tracking-widest focus:outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400"
+              />
+              <button
+                onClick={handleTeamChange}
+                disabled={!newInviteCode.trim() || isChangingTeam}
+                className="bg-blue-600 text-white rounded-xl px-4 py-2.5 text-sm font-semibold hover:bg-blue-700 disabled:opacity-50 transition-colors whitespace-nowrap"
+              >
+                {isChangingTeam ? '이전 중...' : '이전'}
+              </button>
+            </div>
           </div>
         )}
       </main>
