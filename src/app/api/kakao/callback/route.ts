@@ -33,15 +33,20 @@ export async function POST(request: NextRequest) {
     const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL}/sika/kakao-connect`
 
     // 카카오 토큰 발급 요청
+    const tokenParams: Record<string, string> = {
+      grant_type: 'authorization_code',
+      client_id: process.env.NEXT_PUBLIC_KAKAO_REST_API_KEY!,
+      redirect_uri: redirectUri,
+      code,
+    }
+    if (process.env.KAKAO_CLIENT_SECRET) {
+      tokenParams.client_secret = process.env.KAKAO_CLIENT_SECRET
+    }
+
     const tokenRes = await fetch('https://kauth.kakao.com/oauth/token', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        grant_type: 'authorization_code',
-        client_id: process.env.NEXT_PUBLIC_KAKAO_REST_API_KEY!,
-        redirect_uri: redirectUri,
-        code,
-      }),
+      body: new URLSearchParams(tokenParams),
     })
 
     if (!tokenRes.ok) {
