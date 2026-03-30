@@ -17,6 +17,7 @@ import {
   sendKakaoNotification,
   getTodayKey,
   joinTeamByCode,
+  updateUserName,
 } from '@/lib/firestore'
 import { AttendanceRecord, Location } from '@/types'
 
@@ -34,6 +35,9 @@ export default function DashboardPage() {
   const [newInviteCode, setNewInviteCode] = useState('')
   const [isChangingTeam, setIsChangingTeam] = useState(false)
   const [teamChangeError, setTeamChangeError] = useState<string | null>(null)
+  const [isEditingName, setIsEditingName] = useState(false)
+  const [editingName, setEditingName] = useState('')
+  const [isSavingName, setIsSavingName] = useState(false)
 
   // 로그인 여부 확인 및 데이터 로드
   useEffect(() => {
@@ -98,6 +102,20 @@ export default function DashboardPage() {
     }
   }
 
+  const handleSaveName = async () => {
+    if (!editingName.trim() || !currentUser) return
+    setIsSavingName(true)
+    try {
+      await updateUserName(currentUser.uid, editingName.trim())
+      await refreshUser()
+      setIsEditingName(false)
+    } catch {
+      alert('이름 변경에 실패했습니다.')
+    } finally {
+      setIsSavingName(false)
+    }
+  }
+
   const handleTeamChange = async () => {
     if (!newInviteCode.trim() || !currentUser) return
     setIsChangingTeam(true)
@@ -153,8 +171,43 @@ export default function DashboardPage() {
           <h1 className="text-lg font-bold text-gray-800">출근 체크</h1>
           <p className="text-xs text-gray-400">{formatDate()}</p>
         </div>
-        <div className="flex items-center gap-3">
-          <span className="text-sm text-gray-600">{currentUser?.name}</span>
+        <div className="flex items-center gap-2">
+          {isEditingName ? (
+            <div className="flex items-center gap-1">
+              <input
+                type="text"
+                value={editingName}
+                onChange={(e) => setEditingName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleSaveName()
+                  if (e.key === 'Escape') setIsEditingName(false)
+                }}
+                autoFocus
+                className="border border-blue-300 rounded-lg px-2 py-1 text-sm w-24 focus:outline-none focus:ring-1 focus:ring-blue-400"
+              />
+              <button
+                onClick={handleSaveName}
+                disabled={isSavingName || !editingName.trim()}
+                className="text-xs bg-blue-600 text-white rounded-lg px-2 py-1 font-semibold disabled:opacity-50"
+              >
+                저장
+              </button>
+              <button
+                onClick={() => setIsEditingName(false)}
+                className="text-xs text-gray-400 rounded-lg px-1 py-1"
+              >
+                취소
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => { setIsEditingName(true); setEditingName(currentUser?.name || '') }}
+              className="text-sm text-gray-600 hover:text-blue-600 flex items-center gap-1 group"
+            >
+              {currentUser?.name}
+              <span className="text-xs text-gray-300 group-hover:text-blue-400">✏️</span>
+            </button>
+          )}
           <button
             onClick={signOut}
             className="text-xs text-gray-400 hover:text-gray-600 border border-gray-200 rounded-lg px-3 py-1.5 transition-colors"
